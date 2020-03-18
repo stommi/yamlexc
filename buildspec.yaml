@@ -52,3 +52,8 @@ Resources:
     Type: 'AWS::S3::Bucket'
     Properties:
       AccessControl: PublicRead
+
+Outputs:
+  MyLoadBalancerDNSName:
+    Description: The DNSName of the load balancer
+    Value: !GetAtt MyLoadBalancer.DNSName
