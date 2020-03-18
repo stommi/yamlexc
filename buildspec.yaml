@@ -47,6 +47,11 @@ Resources:
     Properties:
       VpcId: vpc-4c243025
       GroupDescription: Sample source security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref SGForLB
 
   SGForLB:
     Type: 'AWS::EC2::SecurityGroup'
@@ -54,10 +59,10 @@ Resources:
       VpcId: vpc-4c243025
       GroupDescription: Sample source security group
 
-  MyEIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      InstanceId: !Ref MyEC2Instance
+#  MyEIP:
+#    Type: AWS::EC2::EIP
+#    Properties:
+#      InstanceId: !Ref MyEC2Instance
 
   MyQueue:
     Type: 'AWS::SQS::Queue'
