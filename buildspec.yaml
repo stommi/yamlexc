@@ -19,6 +19,8 @@ Resources:
             Iops: 200
             DeleteOnTermination: false
             VolumeSize: 20
+      SecurityGroupIds:
+        - !Ref SgForEC2
 
   MyLoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
@@ -37,6 +39,20 @@ Resources:
         Interval: '30'
         Timeout: '5'
       LoadBalancerName: tommitestilb
+      SecurityGroups:
+        - !Ref SGForLB
+
+  SgForEC2:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: vpc-4c243025
+      GroupDescription: Sample source security group
+
+  SGForLB:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: vpc-4c243025
+      GroupDescription: Sample source security group
 
   MyEIP:
     Type: AWS::EC2::EIP
