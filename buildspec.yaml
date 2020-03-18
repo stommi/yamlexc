@@ -20,6 +20,24 @@ Resources:
             DeleteOnTermination: false
             VolumeSize: 20
 
+  MyLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      AvailabilityZones:
+        - "eu-west-3a"
+      Instances: [!Ref MyEC2Instance]
+      Listeners:
+        - LoadBalancerPort: '80'
+          InstancePort: '80'
+          Protocol: HTTP
+      HealthCheck:
+        Target: HTTP:80/
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '30'
+        Timeout: '5'
+      LoadBalancerName: tommitestilb
+
   MyEIP:
     Type: AWS::EC2::EIP
     Properties:
