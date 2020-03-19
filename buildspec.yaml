@@ -1,111 +1,126 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Academy Demo CloudFormation
-
 Parameters:
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
 Resources:
-
-  MyEC2Instance:
-    Type: 'AWS::EC2::Instance'
+  SGInstance:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for EC2 instance'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref SGLoadBalancer
+  SGLoadBalancer:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: vpc-4c243025
+      GroupDescription: LoadBalancer Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+  MyAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        - "eu-west-3a"
+        - "eu-west-3b"
+        - "eu-west-3c"
+      LaunchConfigurationName: !Ref MyLaunchConfiguration
+      MaxSize: 3
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref MyTargetGroup
+  MyLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
       ImageId: !Ref LatestAmiId
-      InstanceType: t2.micro
-      KeyName: tommikonetiistai
-      BlockDeviceMappings:
-        - DeviceName: /dev/sdm
-          Ebs:
-            VolumeType: io1
-            Iops: 200
-            DeleteOnTermination: false
-            VolumeSize: 20
-      SecurityGroupIds:
-        - !Ref SgForEC2
-
-#  MyLoadBalancer:
-#    Type: AWS::ElasticLoadBalancing::LoadBalancer
-#    Properties:
-#      AvailabilityZones:
-#        - "eu-west-3a"
-#      Instances: [!Ref MyEC2Instance]
-#      Listeners:
-#        - LoadBalancerPort: '80'
-#          InstancePort: '80'
-#          Protocol: HTTP
-#      HealthCheck:
-#        Target: HTTP:80/
-#        HealthyThreshold: '3'
-#        UnhealthyThreshold: '5'
-#        Interval: '30'
-#        Timeout: '5'
-#      LoadBalancerName: tommitestilb
-#      SecurityGroups:
-#        - !Ref SGForLB
-
-  MyLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Type: application
+      InstanceType: !Ref InstanceTypeParameter
       SecurityGroups:
-        - !Ref SGForLB
-      Scheme: internet-facing
-      Subnets:
-        - subnet-7052cd3d
-        - subnet-5af8cb33
-
+        - !Ref SGInstance
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - "\n"
+            - - "#!/bin/bash"
+              - "amazon-linux-extras install epel"
+              - "amazon-linux-extras install nginx1"
+              - "systemctl start nginx"
+  MyQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: Tommi-Queue
   MyListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref V2TG
+          TargetGroupArn: !Ref MyTargetGroup
       LoadBalancerArn: !Ref MyLoadBalancer
       Port: 80
       Protocol: "HTTP"
-
-  V2TG:
+  MyTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckEnabled: true
-      Port: "80"
-      Protocol: "HTTP"
       TargetType: instance
-      VpcId: vpc-4c243025
-
-  SgForEC2:
-    Type: 'AWS::EC2::SecurityGroup'
+      Port: 80
+      Protocol: "HTTP"
+      VpcId: vpc-081c6760
+  MyLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      VpcId: vpc-4c243025
-      GroupDescription: Sample source security group
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
-          SourceSecurityGroupId: !Ref SGForLB
-
-  SGForLB:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      VpcId: vpc-4c243025
-      GroupDescription: Sample source security group
-
-#  MyEIP:
-#    Type: AWS::EC2::EIP
-#    Properties:
-#      InstanceId: !Ref MyEC2Instance
-
-  MyQueue:
-    Type: 'AWS::SQS::Queue'
-    Properties:
-      QueueName: Tommi-que
-
+      SecurityGroups:
+        - !Ref SGLoadBalancer
+      Scheme: internet-facing
+      Subnets:
+        - subnet-7052cd3d
+        - subnet-5af8cb33
   S3Bucket:
-    Type: 'AWS::S3::Bucket'
+    Type: AWS::S3::Bucket
     Properties:
+      BucketName: tommi-cloudformation-bucket
       AccessControl: PublicRead
-
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+    DeletionPolicy: Retain
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /*
+      Bucket: !Ref S3Bucket
 Outputs:
-  MyLoadBalancerDNSName:
-    Description: The DNSName of the load balancer
+  LoadBalancerDNSAddress:
     Value: !GetAtt MyLoadBalancer.DNSName
+  WebsiteURL:
+    Value: !GetAtt
+      - S3Bucket
+      - WebsiteURL
+    Description: URL for website hosted on S3
+  S3BucketSecureURL:
+    Value: !Join
+      - ''
+      - - 'https://'
+        - !GetAtt
+          - S3Bucket
+          - DomainName
+    Description: Name of S3 bucket to hold website content
