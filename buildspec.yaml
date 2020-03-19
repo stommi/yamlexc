@@ -6,6 +6,7 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 Resources:
+
   MyEC2Instance:
     Type: 'AWS::EC2::Instance'
     Properties:
@@ -22,25 +23,55 @@ Resources:
       SecurityGroupIds:
         - !Ref SgForEC2
 
+#  MyLoadBalancer:
+#    Type: AWS::ElasticLoadBalancing::LoadBalancer
+#    Properties:
+#      AvailabilityZones:
+#        - "eu-west-3a"
+#      Instances: [!Ref MyEC2Instance]
+#      Listeners:
+#        - LoadBalancerPort: '80'
+#          InstancePort: '80'
+#          Protocol: HTTP
+#      HealthCheck:
+#        Target: HTTP:80/
+#        HealthyThreshold: '3'
+#        UnhealthyThreshold: '5'
+#        Interval: '30'
+#        Timeout: '5'
+#      LoadBalancerName: tommitestilb
+#      SecurityGroups:
+#        - !Ref SGForLB
+
   MyLoadBalancer:
-    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      AvailabilityZones:
-        - "eu-west-3a"
-      Instances: [!Ref MyEC2Instance]
-      Listeners:
-        - LoadBalancerPort: '80'
-          InstancePort: '80'
-          Protocol: HTTP
-      HealthCheck:
-        Target: HTTP:80/
-        HealthyThreshold: '3'
-        UnhealthyThreshold: '5'
-        Interval: '30'
-        Timeout: '5'
-      LoadBalancerName: tommitestilb
+      Type: application
       SecurityGroups:
         - !Ref SGForLB
+      Scheme: internet-facing
+      Subnets:
+        - subnet-7052cd3d
+        - subnet-5af8cb33
+
+  MyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref V2TG
+      LoadBalancerArn: !Ref MyLoadBalancer
+      Port: 80
+      Protocol: "HTTP"
+
+  V2TG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      Port: "80"
+      Protocol: "HTTP"
+      TargetType: instance
+      VpcId: vpc-4c243025
 
   SgForEC2:
     Type: 'AWS::EC2::SecurityGroup'
